@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "version": 1,
+  "modules": [
+    {
+      "id": "novelneko",
+      "familyID": "novelneko-v1",
+      "version": "1.0.0",
+      "manifest": "modules/novelneko/manifest.json"
+    }
+  ]
+}
