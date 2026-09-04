@@ -1,0 +1,82 @@
+globalThis.SynthetiqModule = {
+  async discoveryHome() {
+    return {
+      sections: [
+        { id: "lightnovels", title: "Light Novels", feedID: "lightnovels" },
+        { id: "webnovels", title: "Web Novels", feedID: "webnovels" }
+      ]
+    };
+  },
+
+  async discoveryFeed(feedID, page = 1) {
+    if (page > 1) return { items: [], hasMore: false };
+
+    const url = `https://novelneko.fr/${feedID}/`;
+    const res = await fetchv2(url, { headers: { "User-Agent": "SynthetiqBooks/1.0" } });
+    if (res.status !== 200) throw new Error(`HTTP Error ${res.status}`);
+
+    const html = await res.text();
+    const items = [];
+    const cardRegex = /<a\s+href="([^"]+)"\s+class="[^"]*card[^"]*">[\s\S]*?<img\s+alt="([^"]+)"\s+src="([^"]+)"[\s\S]*?<h3>([^<]+)<\/h3>/gi;
+    let match;
+
+    while ((match = cardRegex.exec(html)) !== null) {
+      const fullHref = new URL(match[1], url).href;
+      const fullCover = new URL(match[3], fullHref).href;
+      items.push({ id: fullHref, title: match[4].trim(), href: fullHref, cover: fullCover });
+    }
+
+    return { items, hasMore: false };
+  },
+
+  async searchResults(query, page = 1) {
+    if (page > 1) return { items: [], hasMore: false };
+    const feed = await this.discoveryFeed("lightnovels", 1);
+    const normalizedQuery = query.toLowerCase().trim();
+    return {
+      items: feed.items.filter(item => item.title.toLowerCase().includes(normalizedQuery)),
+      hasMore: false
+    };
+  },
+
+  async extractDetails(itemID) {
+    const res = await fetchv2(itemID, { headers: { "User-Agent": "SynthetiqBooks/1.0" } });
+    if (res.status !== 200) throw new Error(`HTTP Error ${res.status}`);
+
+    const html = await res.text();
+    const titleMatch = html.match(/<h1>([^<]+)<\/h1>/i);
+    const coverMatch = html.match(/<img\s+alt="[^"]*"\s+src="([^"]+)"/i);
+    const authorMatch = html.match(/<strong>Auteur\s*:<\/strong>\s*([^<]+)/i);
+    const descMatch = html.match(/<strong>Synopsis\s*:<\/strong><br><br>\s*([\s\S]*?)<\/div>/i);
+
+    return {
+      id: itemID,
+      title: titleMatch ? titleMatch[1].trim() : "Unknown Title",
+      cover: coverMatch ? new URL(coverMatch[1], itemID).href : "",
+      author: authorMatch ? authorMatch[1].trim() : "",
+      description: descMatch ? descMatch[1].replace(/<br\s*\/?>/gi, "\n").trim() : "",
+      status: "Terminé"
+    };
+  },
+
+  async extractChapters(itemID) {
+    const res = await fetchv2(itemID, { headers: { "User-Agent": "SynthetiqBooks/1.0" } });
+    if (res.status !== 200) throw new Error(`HTTP Error ${res.status}`);
+
+    const html = await res.text();
+    const chapters = [];
+    const linkRegex = /<a\s+href="(volumes\/[^"]+)"[^>]*>([^<]+)<\/a>/gi;
+    let match;
+
+    while ((match = linkRegex.exec(html)) !== null) {
+      const pdfUrl = new URL(match[1], itemID).href;
+      chapters.push({ id: pdfUrl, title: match[2].trim(), href: pdfUrl });
+    }
+
+    return chapters.reverse();
+  },
+
+  async extractResources(chapterID) {
+    return [{ type: "pdf", url: chapterID, title: "Télécharger Tome PDF" }];
+  }
+};
